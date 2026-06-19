@@ -1,0 +1,40 @@
+Metadata-Version: 2.4
+Name: periodicwave
+Version: 0.0
+Summary: Neural network variational Monte Carlo for solids
+Home-page: https://github.com/mg607/periodicwave
+Author: Max Geier, Khachatur Nazaryan
+Author-email: contact@deeppsi.ai
+License: Apache 2.0
+Platform: any
+License-File: LICENSE
+Requires-Dist: absl-py
+Requires-Dist: attrs
+Requires-Dist: chex==0.1.91
+Requires-Dist: h5py==3.14.0
+Requires-Dist: folx @ git+https://github.com/microsoft/folx
+Requires-Dist: jax==0.7.2
+Requires-Dist: jaxlib==0.7.2
+Requires-Dist: kfac-jax @ git+https://github.com/deepmind/kfac-jax@d9ecae99e588e4abbb0dd3d4e977d1266824e14c
+Requires-Dist: ml-collections
+Requires-Dist: optax==0.2.6
+Requires-Dist: numpy==2.3.3
+Requires-Dist: pandas==2.3.3
+Requires-Dist: pyblock
+Requires-Dist: scipy==1.16.2
+Requires-Dist: typing_extensions
+Requires-Dist: distrax==0.1.7
+Provides-Extra: testing
+Requires-Dist: flake8; extra == "testing"
+Requires-Dist: pylint; extra == "testing"
+Requires-Dist: pytest; extra == "testing"
+Requires-Dist: pytype; extra == "testing"
+Dynamic: author
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: platform
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: summary

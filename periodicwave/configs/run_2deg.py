@@ -102,7 +102,7 @@ cfg.batch_size = 1024
 # learning rate parameters
 cfg.optim.optimizer = 'kfac'
 cfg.optim.objective = 'vmc'
-cfg.optim.iterations = 200000
+cfg.optim.iterations = 2000
 cfg.optim.lr.rate  = 0.1
 cfg.optim.lr.delay = 20000
 cfg.optim.lr.decay = 1.0

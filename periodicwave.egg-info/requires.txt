@@ -1,0 +1,22 @@
+absl-py
+attrs
+chex==0.1.91
+h5py==3.14.0
+folx @ git+https://github.com/microsoft/folx
+jax==0.7.2
+jaxlib==0.7.2
+kfac-jax @ git+https://github.com/deepmind/kfac-jax@d9ecae99e588e4abbb0dd3d4e977d1266824e14c
+ml-collections
+optax==0.2.6
+numpy==2.3.3
+pandas==2.3.3
+pyblock
+scipy==1.16.2
+typing_extensions
+distrax==0.1.7
+
+[testing]
+flake8
+pylint
+pytest
+pytype
