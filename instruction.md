@@ -9,7 +9,7 @@ The short version: this repository is a JAX implementation of continuous-space V
 The target Hamiltonian is a continuum many-electron Hamiltonian in a finite periodic supercell,
 
 $$
-H
+  H
 = -\frac{1}{2}\sum_i \nabla_i^2
 + \sum_i V(\mathbf r_i)
 + \frac{1}{2}\sum_{i\ne j}\frac{U}{|\mathbf r_i-\mathbf r_j|_{\mathrm{PBC}}}.

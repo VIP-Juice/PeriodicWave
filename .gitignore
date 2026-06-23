@@ -1,3 +1,5 @@
 *.DS_Store
 results/
 periodicwave.egg-info/
+pdwave/
+test/

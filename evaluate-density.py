@@ -114,10 +114,10 @@ num_unit_cells = 9
 nspins = (6, 0)
 num_electrons = sum(nspins)
 me_eff_rel = 0.35 # in units of bare electron mass
-eps_inverse = 0.15 # inverse dielectric constant of surrounding dielectric
+eps_inverse = 0.2 # inverse dielectric constant of surrounding dielectric
 moire_lattice_constant_nm = 8.031 # in nm
 moire_potential_strength_meV = 15 # in meV
-moire_potential_phi = 45.0 # potential shape angle in degrees
+moire_potential_phi = 45 # potential shape angle in degrees
 
 # Convert SI units to natural units
 energy_scale, moire_potential_strength, interaction_energy_scale = convert_moire_scales(me_eff_rel, eps_inverse, moire_lattice_constant_nm, moire_potential_strength_meV)

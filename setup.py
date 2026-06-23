@@ -26,21 +26,24 @@ from setuptools import find_packages
 from setuptools import setup
 
 REQUIRED_PACKAGES = [
-    'absl-py',
-    'attrs',
+    'absl-py==2.3.1',
+    'attrs==25.4.0',
     'chex==0.1.91',
     'h5py==3.14.0',
-    'folx @ git+https://github.com/microsoft/folx',
+    'folx @ git+https://github.com/microsoft/folx@d05c107028e3f88239ebf9e894d4a8c01abf90f6',
     'jax==0.7.2',
     'jaxlib==0.7.2',
+    'ipykernel==7.3.0',
     'kfac-jax @ git+https://github.com/deepmind/kfac-jax@d9ecae99e588e4abbb0dd3d4e977d1266824e14c',
-    'ml-collections',
+    'matplotlib',
+    'ml-collections==1.1.0',
     'optax==0.2.6',
     'numpy==2.3.3',
     'pandas==2.3.3',
-    'pyblock',
+    'pyblock==0.6',
     'scipy==1.16.2',
-    'typing_extensions',
+    'tfp-nightly==0.26.0.dev20251007',
+    'typing_extensions==4.15.0',
     'distrax==0.1.7',
 ]
 

@@ -29,44 +29,61 @@ Additionally, there are the following interface and data analysis scripts:
 Authors: Max Geier, Khachatur Nazaryan (2025)
 Massachusetts Institute of Technology
 
-## Installation (Verified on 10/09/2025)
+## Installation
 
 1. Clone PeriodicWave repository
 ```
 git clone https://github.com/mg607/PeriodicWave
+cd PeriodicWave
 ```
 
-2. Install python 3.13 environment:
+2. Create one local uv environment inside the repository:
 ```
-conda create --name py313 python=3.13 numpy scipy pandas matplotlib virtualenv
-```
-
-3. Activate py313 environment and create virtualenv from there:
-```
-conda activate py313
-virtualenv ~/venv/periodicwave
+uv venv pdwave --python 3.13
 ```
 
-4. Activate new virtual environment
+3. Install the locked dependency set:
 ```
-source ~/venv/periodicwave/bin/activate
-```
-
-5. Install PeriodicWave with all dependencies
-In the periodicwave folder that contains setup.py:
-```
-pip install -e .
+uv pip sync requirements.lock --python pdwave/bin/python
 ```
 
-6. Optionally: Install GPU support if a GPU is available, The following updates JAX and installs all cuda versions.
+If `requirements.lock` is missing or needs to be regenerated after changing
+`setup.py`, compile it first:
 ```
-pip install -U "jax[cuda12]"
+uv pip compile setup.py -o requirements.lock
 ```
 
-7. Verify installation:
-The following command should run a calculation of a two-dimensional Coulomb gas for 2 spin-up electrons at r_s = 10 with CustomPsiformer:
+4. Install PeriodicWave itself in editable mode without re-resolving
+dependencies:
 ```
-python3 periodicwave/configs/run_2deg.py
+uv pip install -e . --no-deps --python pdwave/bin/python
+```
+
+5. Activate the environment when working interactively:
+```
+source pdwave/bin/activate
+```
+
+For VS Code or Jupyter interactive use, select `pdwave/bin/python` as the
+interpreter. If the kernel is not listed, register it with:
+```
+pdwave/bin/python -m ipykernel install --user --name pdwave --display-name "Python (pdwave)"
+```
+
+The editable install uses the CPU-compatible dependency pins in `setup.py`,
+including `jax==0.7.2` and `jaxlib==0.7.2`. Do not run `pip install -U
+"jax[cuda12]"` in this environment, since that changes the pinned JAX stack.
+
+6. Verify installation with a lightweight import check:
+```
+pdwave/bin/python -c "import ipykernel, jax, jaxlib, distrax, folx, kfac_jax, periodicwave; print(jax.__version__)"
+```
+
+The command should print `0.7.2`.
+
+7. To run the example calculation:
+```
+pdwave/bin/python periodicwave/configs/run_2deg.py
 ```
 
 ## Running two-dimensional electron gas calculations

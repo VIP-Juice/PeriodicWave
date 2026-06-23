@@ -75,10 +75,10 @@ num_unit_cells = 9
 nspins = (6, 0)
 num_electrons = sum(nspins)
 me_eff_rel = 0.35 # in units of bare electron mass
-eps_inverse = 0.1 # inverse dielectric constant of surrounding dielectric
+eps_inverse = 0.2 # inverse dielectric constant of surrounding dielectric
 moire_lattice_constant_nm = 8.031 # in nm
 moire_potential_strength_meV = 15 # in meV
-moire_potential_phi = 45.0 # potential shape angle in degrees
+moire_potential_phi = 45 # potential shape angle in degrees
 
 # Convert SI units to natural units
 energy_scale, moire_potential_strength, interaction_energy_scale = convert_moire_scales(me_eff_rel, eps_inverse, moire_lattice_constant_nm, moire_potential_strength_meV)
@@ -87,7 +87,7 @@ energy_scale, moire_potential_strength, interaction_energy_scale = convert_moire
 folder_name = f"results/2deg-CoulombMoire/{network_type}/el{nspins[0]}_{nspins[1]}_N{num_unit_cells}_V{np.round(moire_potential_strength,8)}_{moire_potential_phi}_U{np.round(interaction_energy_scale,8)}"
 train_data = load_csv_data(folder_name, "train_stats.csv")
 
-fig, ax = plt.subplots(1,1, figsize = (7,5))
-ax.plot(train_data['step'][10000:], train_data['energy'][10000:] * energy_scale / num_electrons, marker='o', linestyle='-', linewidth=0.4, markersize=1, alpha=0.4)
+fig, ax = plt.subplots(1,1, figsize = (7,5), dpi=300)
+ax.plot(train_data['step'], train_data['energy'] * energy_scale / num_electrons, marker='o', linestyle='-', linewidth=0.4, markersize=1, alpha=0.4)
 ax.set_xlabel("step")
 ax.set_ylabel("energy (meV)")
