@@ -70,7 +70,7 @@ class Writer(contextlib.AbstractContextManager):
 
     # write the data to csv
     self._file.write(','.join(row) + '\n')
-
+    self._file.flush()
     # write the data to abseil logs
     if self._log:
       logging.info('Iteration %s: %s', t, data)
