@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import numpy as np
 from matplotlib import pyplot as plt
 import os
@@ -107,11 +106,11 @@ def get_positions_from_latest_npz_files(folder_path, N):
     return positions_ckpt, spins_ckpt, filenames
 
 # system parameters
-potential_type = "CoulombMoire"
-network_type = "CustomPsiformer"
+potential_type = "Coulomb"
+network_type = "SlaterNet"
 ndim = 2
 num_unit_cells = 9
-nspins = (6, 0)
+nspins = (3, 3)
 num_electrons = sum(nspins)
 me_eff_rel = 0.35 # in units of bare electron mass
 eps_inverse = 0.2 # inverse dielectric constant of surrounding dielectric
@@ -119,11 +118,15 @@ moire_lattice_constant_nm = 8.031 # in nm
 moire_potential_strength_meV = 15 # in meV
 moire_potential_phi = 45 # potential shape angle in degrees
 
+rs = 33.0
+supercell_shape = 'tri' # triangular supercell
+
 # Convert SI units to natural units
 energy_scale, moire_potential_strength, interaction_energy_scale = convert_moire_scales(me_eff_rel, eps_inverse, moire_lattice_constant_nm, moire_potential_strength_meV)
 
 # generate folder name
-folder_name = f"results/2deg-CoulombMoire/{network_type}/el{nspins[0]}_{nspins[1]}_N{num_unit_cells}_V{np.round(moire_potential_strength,8)}_{moire_potential_phi}_U{np.round(interaction_energy_scale,8)}"
+folder_name = f"results/2deg-{potential_type}/{network_type}/el{nspins[0]}_{nspins[1]}_rs{rs}_{supercell_shape}"
+# folder_name = f"results/2deg-CoulombMoire/{network_type}/el{nspins[0]}_{nspins[1]}_N{num_unit_cells}_V{np.round(moire_potential_strength,8)}_{moire_potential_phi}_U{np.round(interaction_energy_scale,8)}"
 
 moire_a = 1.0
 lat_vec, moire_lat_vec, lattice_M = lattices._triangular_lattice_vecs_periodic_potential(a = moire_a, num_sites=num_unit_cells, return_lattice_M = True)
