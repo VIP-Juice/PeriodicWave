@@ -25,27 +25,43 @@ import unittest
 from setuptools import find_packages
 from setuptools import setup
 
-REQUIRED_PACKAGES = [
+COMMON_PACKAGES = [
     'absl-py==2.3.1',
     'attrs==25.4.0',
     'chex==0.1.91',
-    'h5py==3.14.0',
+    'distrax==0.1.7',
     'folx @ git+https://github.com/microsoft/folx@d05c107028e3f88239ebf9e894d4a8c01abf90f6',
-    'jax==0.7.2',
-    'jaxlib==0.7.2',
     'ipykernel==7.3.0',
-    'kfac-jax @ git+https://github.com/deepmind/kfac-jax@d9ecae99e588e4abbb0dd3d4e977d1266824e14c',
-    'matplotlib',
+    'matplotlib==3.11.0',
     'ml-collections==1.1.0',
     'optax==0.2.6',
-    'numpy==2.3.3',
     'pandas==2.3.3',
     'pyblock==0.6',
     'scipy==1.16.2',
-    'tfp-nightly==0.26.0.dev20251007',
     'typing_extensions==4.15.0',
-    'distrax==0.1.7',
 ]
+
+CPU_PACKAGES = [
+    'h5py==3.14.0',
+    'jax==0.7.2',
+    'jaxlib==0.7.2',
+    'kfac-jax @ git+https://github.com/deepmind/kfac-jax@d9ecae99e588e4abbb0dd3d4e977d1266824e14c',
+    'numpy==2.3.3',
+    'tfp-nightly==0.26.0.dev20251007',
+]
+
+GPU_PACKAGES = [
+    'h5py==3.15.1',
+    'jax==0.8.0',
+    'jax-cuda12-pjrt==0.8.0',
+    'jax-cuda12-plugin[with-cuda]==0.8.0',
+    'jaxlib==0.8.0',
+    'kfac-jax @ git+https://github.com/deepmind/kfac-jax@55111a15e51b38a4cefbfd16cdda52472cda2632',
+    'numpy==2.3.4',
+    'tfp-nightly==0.26.0.dev20251017',
+]
+
+REQUIRED_PACKAGES = COMMON_PACKAGES
 
 
 setup(
@@ -65,7 +81,11 @@ setup(
     },
     packages=find_packages(),
     install_requires=REQUIRED_PACKAGES,
-    extras_require={'testing': ['flake8', 'pylint', 'pytest', 'pytype']},
+    extras_require={
+        'cpu': CPU_PACKAGES,
+        'gpu': GPU_PACKAGES,
+        'testing': ['flake8', 'pylint', 'pytest', 'pytype'],
+    },
     platforms=['any'],
     license='Apache 2.0',
 )

@@ -2,4 +2,5 @@
 results/
 periodicwave.egg-info/
 pdwave/
+pdwave-gpu/
 test/

@@ -49,8 +49,8 @@ if len(argv) >= 2:
     # number of spin spin up, down electrons
     nspins = [int(n) for n in argv[1].split('_')] 
     # Ratio between interaction and kinetic energy scale
-    r_s = float(argv[1])
-    network_type = argv[2]
+    r_s = float(argv[2])
+    network_type = argv[3]
 else:
     nspins = [2, 0]
     r_s = 10
@@ -124,7 +124,7 @@ cfg.network.jastrow = "NONE"
 cfg.network.jastrow_kwargs = {'ndim':cfg.system.ndim}
 
 # network architecture parameters
-network_type = 'SlaterNet' 
+# network_type = 'SlaterNet' 
 # Code to run Psiformer
 if network_type == 'CustomPsiformer':
     cfg.network.network_type = 'CustomPsiformer'

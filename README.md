@@ -37,29 +37,35 @@ git clone https://github.com/mg607/PeriodicWave
 cd PeriodicWave
 ```
 
-2. Create one local uv environment inside the repository:
+This repository keeps CPU and GPU dependency stacks separate. Use `pdwave` for
+the CPU/Mac setup and `pdwave-gpu` for a CUDA/Linux GPU setup. Both workflows
+first sync third-party dependencies from a lock file, then install the local
+PeriodicWave package in editable mode without re-resolving dependencies.
+
+### CPU/Mac environment
+
+Create one local uv environment inside the repository:
 ```
 uv venv pdwave --python 3.13
 ```
 
-3. Install the locked dependency set:
+If `requirements.lock` is missing or needs to be regenerated after changing
+`setup.py`, compile it from the CPU extra:
+```
+uv pip compile setup.py --extra cpu -o requirements.lock
+```
+
+Install the locked CPU dependency set:
 ```
 uv pip sync requirements.lock --python pdwave/bin/python
 ```
 
-If `requirements.lock` is missing or needs to be regenerated after changing
-`setup.py`, compile it first:
-```
-uv pip compile setup.py -o requirements.lock
-```
-
-4. Install PeriodicWave itself in editable mode without re-resolving
-dependencies:
+Install PeriodicWave itself in editable mode without re-resolving dependencies:
 ```
 uv pip install -e . --no-deps --python pdwave/bin/python
 ```
 
-5. Activate the environment when working interactively:
+Activate the environment when working interactively:
 ```
 source pdwave/bin/activate
 ```
@@ -70,20 +76,69 @@ interpreter. If the kernel is not listed, register it with:
 pdwave/bin/python -m ipykernel install --user --name pdwave --display-name "Python (pdwave)"
 ```
 
-The editable install uses the CPU-compatible dependency pins in `setup.py`,
-including `jax==0.7.2` and `jaxlib==0.7.2`. Do not run `pip install -U
-"jax[cuda12]"` in this environment, since that changes the pinned JAX stack.
+The CPU environment uses `jax==0.7.2` and `jaxlib==0.7.2`. Do not run
+`pip install -U "jax[cuda12]"` in this environment, since that changes the
+pinned CPU-compatible JAX stack.
 
-6. Verify installation with a lightweight import check:
+Verify the CPU installation with a lightweight import check:
 ```
 pdwave/bin/python -c "import ipykernel, jax, jaxlib, distrax, folx, kfac_jax, periodicwave; print(jax.__version__)"
 ```
 
 The command should print `0.7.2`.
 
-7. To run the example calculation:
+To run the example calculation:
 ```
 pdwave/bin/python periodicwave/configs/run_2deg.py
+```
+
+### CUDA/Linux GPU environment
+
+Use a separate environment for NVIDIA CUDA. Do not reuse `pdwave`, because the
+GPU setup changes the JAX, JAXLIB, CUDA plugin, KFAC-JAX, and TFP-nightly
+versions.
+
+Create the GPU environment:
+```
+uv venv pdwave-gpu --python 3.13
+```
+
+If `requirements-gpu.lock` is missing or needs to be regenerated, compile it
+from the GPU extra. When compiling on macOS for a Linux GPU machine, include the
+Linux platform flag:
+```
+uv pip compile setup.py --extra gpu --python-platform x86_64-unknown-linux-gnu -o requirements-gpu.lock
+```
+
+On the target Linux GPU machine, the platform flag can be omitted:
+```
+uv pip compile setup.py --extra gpu -o requirements-gpu.lock
+```
+
+Install the locked GPU dependency set:
+```
+uv pip sync requirements-gpu.lock --python pdwave-gpu/bin/python
+```
+
+Install PeriodicWave itself in editable mode without re-resolving dependencies:
+```
+uv pip install -e . --no-deps --python pdwave-gpu/bin/python
+```
+
+Activate the environment when working interactively:
+```
+source pdwave-gpu/bin/activate
+```
+
+For VS Code or Jupyter interactive use, select `pdwave-gpu/bin/python` as the
+interpreter. If the kernel is not listed, register it with:
+```
+pdwave-gpu/bin/python -m ipykernel install --user --name pdwave-gpu --display-name "Python (pdwave-gpu)"
+```
+
+Verify the GPU installation:
+```
+pdwave-gpu/bin/python -c "import jax, periodicwave; print(jax.__version__); print(jax.devices())"
 ```
 
 ## Running two-dimensional electron gas calculations
