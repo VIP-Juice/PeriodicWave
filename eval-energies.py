@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+import json
+from pathlib import Path
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,12 +62,93 @@ def convert_moire_scales(me_eff_rel = 0.35, eps_inverse = 0.2, moire_a = 8.031, 
     return energy_scale, V, U
 
 def load_csv_data(folder_path, file_name):
-    # Construct the full path to the CSV file
-    file_path = os.path.join(folder_path, file_name)
-    
-    data = pd.read_csv(file_path, usecols=["step", "energy", "ewmean", "locstd"])
-    
-    return data
+    return pd.read_csv(
+        Path(folder_path) / file_name,
+        usecols=["step", "energy", "ewmean", "locstd"],
+    )
+
+
+def load_training_series(folder_paths, args):
+    """Validate and load chronological training stages."""
+    histories = []
+    expected_architecture = None
+    for stage_index, folder_path in enumerate(folder_paths):
+        folder = Path(folder_path)
+        if not folder.is_dir():
+            raise FileNotFoundError(f"Training folder does not exist: {folder}")
+
+        config_path = folder / "config.json"
+        if not config_path.is_file():
+            raise FileNotFoundError(f"Missing result metadata: {config_path}")
+        with config_path.open(encoding="utf-8") as config_file:
+            config = json.load(config_file)
+
+        system = config["system"]
+        network = config["network"]
+        network_type = network["network_type"]
+        if (
+            tuple(system["electrons"]) != args["nspins"]
+            or system["make_local_energy_kwargs"]["potential_type"]
+            != args["potential_type"]
+            or network_type != args["network_type"]
+        ):
+            raise ValueError(
+                "Series folders must match the requested potential type, spin "
+                f"sector, and network type; mismatch found in {config_path}."
+            )
+
+        architecture = {
+            "network_config": network[network_type],
+            "determinants": network["determinants"],
+            "complex": network["complex"],
+            "bias_orbitals": network.get("bias_orbitals"),
+            "jastrow": network["jastrow"],
+            "feature_layer": network.get("make_feature_layer_fn"),
+            "envelope": network.get("make_envelope_fn"),
+        }
+        if expected_architecture is None:
+            expected_architecture = architecture
+        elif architecture != expected_architecture:
+            raise ValueError(
+                "All series folders must use the same network architecture; "
+                f"mismatch found in {config_path}."
+            )
+
+        archived_files = []
+        for file_path in folder.glob("train_stats_*.csv"):
+            match = re.fullmatch(r"train_stats_(\d+)\.csv", file_path.name)
+            if match:
+                archived_files.append((int(match.group(1)), file_path))
+        log_files = [
+            file_path
+            for _, file_path in sorted(archived_files, key=lambda item: item[0])
+        ]
+        if (folder / "train_stats.csv").is_file():
+            log_files.append(folder / "train_stats.csv")
+        if not log_files:
+            raise FileNotFoundError(f"No train_stats*.csv files found in: {folder}")
+
+        stage_data = pd.concat(
+            [load_csv_data(folder, file_path.name) for file_path in log_files],
+            ignore_index=True,
+        )
+        if stage_data.empty:
+            raise ValueError(f"Training logs are empty in: {folder}")
+        stage_data[["step", "energy", "ewmean", "locstd"]] = stage_data[
+            ["step", "energy", "ewmean", "locstd"]
+        ].apply(pd.to_numeric, errors="raise")
+        stage_data = stage_data.drop_duplicates("step", keep="last")
+        stage_data["stage_index"] = stage_index
+        stage_data["folder_name"] = folder.name
+        histories.append(stage_data)
+
+    training_series = pd.concat(histories, ignore_index=True)
+    return (
+        training_series.drop_duplicates("step", keep="last")
+        .sort_values("step", kind="stable")
+        .reset_index(drop=True)
+    )
+
 
 def convert_energy_columns(train_data, energy_scale, num_electrons):
     unit_conversion = energy_scale / num_electrons
@@ -82,6 +165,28 @@ def parse_args(argv):
         if len(nspins) != 2:
             raise ValueError("nspins must have format nup_ndown, for example 6_0")
         return nspins
+
+    def parse_folder_inputs(folder_inputs):
+        if not folder_inputs:
+            return "", []
+        if len(folder_inputs) == 1 and (
+            not folder_inputs[0] or folder_inputs[0].startswith("_")
+        ):
+            return folder_inputs[0], []
+        if any(
+            not folder_name or folder_name.startswith("_")
+            for folder_name in folder_inputs
+        ):
+            raise ValueError(
+                "A folder series requires full folder names as separate arguments; "
+                "do not mix names with empty strings or suffixes."
+            )
+        if any(set(folder_name) & set("{},") for folder_name in folder_inputs):
+            raise ValueError(
+                "Pass folder names as separate Bash arguments without braces or commas."
+            )
+        return "", folder_inputs
+
     if len(argv) >= 2:
         potential_type = argv[1]
 
@@ -92,13 +197,15 @@ def parse_args(argv):
                     "Coulomb nspins r_s network_type"
                 )
 
+            folder_name_extension, folder_names = parse_folder_inputs(argv[5:])
             return {
                 "potential_type": potential_type,
                 "nspins": parse_nspins(argv[2]),
                 "r_s": float(argv[3]),
                 "network_type": argv[4],
                 "supercell_shape": "tri",
-                "folder_name_extension": argv[5] if len(argv) >= 6 else "",
+                "folder_name_extension": folder_name_extension,
+                "folder_names": folder_names,
             }
 
         if potential_type == "CoulombMoire":
@@ -110,6 +217,7 @@ def parse_args(argv):
                     "moire_potential_phi network_type"
                 )
 
+            folder_name_extension, folder_names = parse_folder_inputs(argv[10:])
             return {
                 "potential_type": potential_type,
                 "nspins": parse_nspins(argv[2]),
@@ -120,7 +228,8 @@ def parse_args(argv):
                 "moire_potential_strength_meV": float(argv[7]),
                 "moire_potential_phi": float(argv[8]),
                 "network_type": argv[9],
-                "folder_name_extension": argv[10] if len(argv) >= 11 else "",
+                "folder_name_extension": folder_name_extension,
+                "folder_names": folder_names,
             }
 
         raise ValueError(
@@ -139,6 +248,7 @@ def parse_args(argv):
         "moire_potential_phi": 45,
         "network_type": "CustomPsiformer",
         "folder_name_extension": "",
+        "folder_names": [],
     }
 
 def get_folder_name(args, extension=""):
@@ -163,65 +273,127 @@ def get_folder_name(args, extension=""):
     )
     return folder_name + extension
 
-ndim = 2 # spatial dimension of the system
 
-# system parameters
-print(f"Evaluating 2DEG energies with parameters: {argv}")
-args = parse_args(argv)
-potential_type = args["potential_type"]
-network_type = args["network_type"]
-nspins = args["nspins"]
-num_electrons = sum(nspins)
+def plot_energy_history(train_data, energy_scale, num_electrons, energy_ylabel):
+    energy_data = convert_energy_columns(train_data, energy_scale, num_electrons)
+    if "stage_index" in train_data.columns:
+        final_stage = train_data["stage_index"].max()
+        final_row_index = train_data.index[
+            train_data["stage_index"] == final_stage
+        ][-1]
+    else:
+        final_row_index = train_data.index[-1]
+    final_ewmean = float(energy_data["ewmean"].loc[final_row_index])
+    final_locstd = float(energy_data["locstd"].loc[final_row_index])
 
-if potential_type == "CoulombMoire":
-    energy_scale, _, _ = convert_moire_scales(
-        args["me_eff_rel"],
-        args["eps_inverse"],
-        args["moire_lattice_constant_nm"],
-        args["moire_potential_strength_meV"],
+    fig, ax = plt.subplots(1, 1, figsize=(7, 5), dpi=300)
+    ax.axhspan(
+        final_ewmean - final_locstd,
+        final_ewmean + final_locstd,
+        color="tab:orange",
+        alpha=0.16,
+        linewidth=0,
+        label=f"final EW mean +/- final local-energy std ({final_locstd:.3g})",
+        zorder=0,
     )
-    energy_ylabel = "energy / electron (meV)"
-else:
-    energy_scale = 1.0
-    energy_ylabel = "energy / electron"
+    ax.axhline(
+        final_ewmean,
+        color="tab:orange",
+        linestyle="--",
+        linewidth=1.2,
+        label=f"final EW mean ({final_ewmean:.6g})",
+        zorder=1,
+    )
 
-# generate folder name
-folder_name = get_folder_name(args, args["folder_name_extension"])
-train_data = load_csv_data(folder_name, "train_stats.csv")
-energy_data = convert_energy_columns(train_data, energy_scale, num_electrons)
-final_ewmean = float(energy_data["ewmean"].iloc[-1])
-final_locstd = float(energy_data["locstd"].iloc[-1])
+    if "stage_index" in train_data.columns:
+        for stage_index, stage_data in train_data.groupby(
+            "stage_index", sort=True
+        ):
+            stage_label = stage_data["folder_name"].iloc[0]
+            line, = ax.plot(
+                stage_data["step"],
+                energy_data["energy"].loc[stage_data.index],
+                marker="o",
+                linestyle="-",
+                linewidth=0.4,
+                markersize=1,
+                alpha=0.4,
+                label=stage_label,
+                zorder=2,
+            )
+            if stage_index > 0:
+                ax.axvline(
+                    stage_data["step"].min(),
+                    color=line.get_color(),
+                    linestyle=":",
+                    linewidth=0.9,
+                    alpha=0.8,
+                    zorder=1,
+                )
+    else:
+        ax.plot(
+            train_data["step"],
+            energy_data["energy"],
+            marker="o",
+            linestyle="-",
+            linewidth=0.4,
+            markersize=1,
+            alpha=0.4,
+            label="batch mean energy",
+            zorder=2,
+        )
 
-fig, ax = plt.subplots(1,1, figsize = (7,5), dpi=300)
-ax.axhspan(
-    final_ewmean - final_locstd,
-    final_ewmean + final_locstd,
-    color="tab:orange",
-    alpha=0.16,
-    linewidth=0,
-    label=f"final EW mean +/- final local-energy std ({final_locstd:.3g})",
-    zorder=0,
-)
-ax.axhline(
-    final_ewmean,
-    color="tab:orange",
-    linestyle="--",
-    linewidth=1.2,
-    label=f"final EW mean ({final_ewmean:.6g})",
-    zorder=1,
-)
-ax.plot(
-    train_data["step"],
-    energy_data["energy"],
-    marker='o',
-    linestyle='-',
-    linewidth=0.4,
-    markersize=1,
-    alpha=0.4,
-    label="batch mean energy",
-    zorder=2,
-)
-ax.set_xlabel("step")
-ax.set_ylabel(energy_ylabel)
-ax.legend(frameon=False)
-fig.tight_layout()
+    ax.set_xlabel("step")
+    ax.set_ylabel(energy_ylabel)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    return fig, ax
+
+
+def main(command_line):
+    print(f"Evaluating 2DEG energies with parameters: {command_line}")
+    args = parse_args(command_line)
+    potential_type = args["potential_type"]
+    nspins = args["nspins"]
+
+    if args["folder_names"]:
+        result_parent = Path(get_folder_name(args)).parent
+        folder_paths = []
+        for folder_name in args["folder_names"]:
+            folder_path = Path(folder_name)
+            if not folder_path.is_absolute() and folder_path.parent == Path("."):
+                folder_path = result_parent / folder_path
+            folder_paths.append(folder_path)
+
+        train_data = load_training_series(folder_paths, args)
+        return plot_energy_history(
+            train_data,
+            energy_scale=1.0,
+            num_electrons=sum(nspins),
+            energy_ylabel="energy / electron (code units)",
+        )
+
+    if potential_type == "CoulombMoire":
+        energy_scale, _, _ = convert_moire_scales(
+            args["me_eff_rel"],
+            args["eps_inverse"],
+            args["moire_lattice_constant_nm"],
+            args["moire_potential_strength_meV"],
+        )
+        energy_ylabel = "energy / electron (meV)"
+    else:
+        energy_scale = 1.0
+        energy_ylabel = "energy / electron"
+
+    folder_name = get_folder_name(args, args["folder_name_extension"])
+    train_data = load_csv_data(folder_name, "train_stats.csv")
+    return plot_energy_history(
+        train_data,
+        energy_scale=energy_scale,
+        num_electrons=sum(nspins),
+        energy_ylabel=energy_ylabel,
+    )
+
+
+if __name__ == "__main__":
+    main(argv)

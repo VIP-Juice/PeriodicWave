@@ -15,6 +15,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import os
+from pathlib import Path
 from sys import argv
 from periodicwave.pbc import lattices
 from periodicwave.utils import observables
@@ -220,8 +221,16 @@ args = parse_args(argv)
 potential_type = args["potential_type"]
 ndim = 2
 
-# generate folder name
-folder_name = get_folder_name(args, args["folder_name_extension"])
+# Generate or resolve the result folder name.
+folder_input = args["folder_name_extension"]
+folder_name = get_folder_name(
+    args, folder_input if folder_input.startswith("_") else ""
+)
+if folder_input and not folder_input.startswith("_"):
+    input_folder = Path(folder_input)
+    if not input_folder.is_absolute() and input_folder.parent == Path("."):
+        input_folder = Path(folder_name).parent / input_folder
+    folder_name = str(input_folder)
 
 lat_vec = get_lattice(args)
 
