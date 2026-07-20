@@ -17,7 +17,6 @@ from matplotlib import pyplot as plt
 import os
 from sys import argv
 from periodicwave.pbc import lattices
-from periodicwave.utils import observables
 
 def convert_moire_scales(me_eff_rel = 0.35, eps_inverse = 0.2, moire_a = 8.031, moire_potential_strength = 15):
     """ 
@@ -82,7 +81,6 @@ def parse_args(argv):
                 "r_s": float(argv[3]),
                 "network_type": argv[4],
                 "supercell_shape": "tri",
-                "folder_name_extension": argv[5] if len(argv) >= 6 else "",
             }
 
         if potential_type == "CoulombMoire":
@@ -104,7 +102,6 @@ def parse_args(argv):
                 "moire_potential_strength_meV": float(argv[7]),
                 "moire_potential_phi": float(argv[8]),
                 "network_type": argv[9],
-                "folder_name_extension": argv[10] if len(argv) >= 11 else "",
             }
 
         raise ValueError(
@@ -122,16 +119,14 @@ def parse_args(argv):
         "moire_potential_strength_meV": 15,
         "moire_potential_phi": 45,
         "network_type": "CustomPsiformer",
-        "folder_name_extension": "",
     }
 
-def get_folder_name(args, extension=""):
+def get_folder_name(args):
     if args["potential_type"] == "Coulomb":
-        folder_name = (
+        return (
             f"results/2deg-Coulomb/{args['network_type']}/"
             f"el{args['nspins'][0]}_{args['nspins'][1]}_rs{args['r_s']}_{args['supercell_shape']}"
         )
-        return folder_name + extension
 
     _, moire_potential_strength, interaction_energy_scale = convert_moire_scales(
         args["me_eff_rel"],
@@ -139,13 +134,12 @@ def get_folder_name(args, extension=""):
         args["moire_lattice_constant_nm"],
         args["moire_potential_strength_meV"],
     )
-    folder_name = (
+    return (
         f"results/2deg-CoulombMoire/{args['network_type']}/"
         f"el{args['nspins'][0]}_{args['nspins'][1]}_N{args['num_unit_cells']}_"
         f"V{np.round(moire_potential_strength,8)}_{args['moire_potential_phi']}_"
         f"U{np.round(interaction_energy_scale,8)}"
     )
-    return folder_name + extension
 
 def get_lattice(args):
     if args["potential_type"] == "Coulomb":
@@ -203,7 +197,9 @@ def get_positions_from_latest_npz_files(folder_path, N):
         file_path = os.path.join(folder_path, filename)
         try:
             ckpt_data = np.load(file_path, allow_pickle=True)
+            print(list(ckpt_data.keys()))
             data = ckpt_data['data'].item()
+            print(list(data.keys()))
             positions_ckpt.append(data['positions'])
             spins_ckpt.append(data['spins'])
             # loaded_data[filename] = data
@@ -218,76 +214,46 @@ def get_positions_from_latest_npz_files(folder_path, N):
 print(f"Evaluating 2DEG density with parameters: {argv}")
 args = parse_args(argv)
 potential_type = args["potential_type"]
+network_type = args["network_type"]
 ndim = 2
+nspins = args["nspins"]
+num_electrons = sum(nspins)
 
 # generate folder name
-folder_name = get_folder_name(args, args["folder_name_extension"])
+folder_name = get_folder_name(args)
 
 lat_vec = get_lattice(args)
+rec = 2 * np.pi * np.linalg.inv(lat_vec)
+area = np.linalg.det(lat_vec)
+r_s = np.sqrt(area / sum(nspins) / np.pi)
 
 load_N_ckpts = 3 # number of latest checkpoints to load 
-observable_bins = 80
-structure_factor_max_index = 6
 
 # load configurations from latest checkpoints
-positions_ckpt, _, _ = get_positions_from_latest_npz_files(folder_name, load_N_ckpts)
-positions_batch = observables.walker_positions_to_samples(positions_ckpt, ndim=ndim)
-
-# Previous versions scattered raw MCMC coordinates and pair displacements.
-# Use normalized Monte Carlo estimators for the observables instead.
-density_obs = observables.estimate_density(
-    positions_batch, lat_vec, bins=observable_bins
-)
-pair_obs = observables.estimate_pair_correlation(
-    positions_batch, lat_vec, bins=observable_bins
-)
-k_indices = observables.reciprocal_index_grid(structure_factor_max_index)
-structure_obs = observables.estimate_structure_factor(
-    positions_batch, lat_vec, k_indices
-)
-
-position_xlabel = "x / a_M" if potential_type == "CoulombMoire" else "x"
-position_ylabel = "y / a_M" if potential_type == "CoulombMoire" else "y"
+positions_ckpt, spins_ckpt, filenames = get_positions_from_latest_npz_files(folder_name, load_N_ckpts)
+shape_pos = np.shape(positions_ckpt)
+positions_batch = np.reshape(np.array(positions_ckpt),(shape_pos[0]*shape_pos[1]*shape_pos[2], shape_pos[3]//ndim, ndim))
+positions_batch = np.array([lattices.send_positions_to_first_unit_cell(config, lat_vec, rec) for config in positions_batch])
 
 # plot electron density
 fig_n, ax_n = plt.subplots(1, 1, figsize = (7, 5))
-im_n = ax_n.pcolormesh(
-    density_obs["mesh_x"],
-    density_obs["mesh_y"],
-    density_obs["density"],
-    shading="auto",
-)
-fig_n.colorbar(im_n, ax=ax_n, label=r"$\rho(\mathbf{r})$")
-ax_n.set_aspect("equal", adjustable="box")
-ax_n.set_xlabel(position_xlabel)
-ax_n.set_ylabel(position_ylabel)
+positions_plot = np.reshape(np.array(positions_batch),(shape_pos[0]*shape_pos[1]*shape_pos[2]*shape_pos[3]//ndim, ndim))
+ax_n.scatter(positions_plot[:,0], positions_plot[:,1], color="tab:blue", s=1, alpha=0.2)
+ax_n.set_xlabel("x / a_M")
+ax_n.set_ylabel("y / a_M")
 ax_n.set_title("Electron density")
 
-# plot pair correlation
-fig_nn, ax_nn = plt.subplots(1, 1, figsize = (7, 5))
-im_nn = ax_nn.pcolormesh(
-    pair_obs["mesh_x"],
-    pair_obs["mesh_y"],
-    pair_obs["pair_correlation"],
-    shading="auto",
-)
-fig_nn.colorbar(im_nn, ax=ax_nn, label=r"$g(\mathbf{r})$")
-ax_nn.set_aspect("equal", adjustable="box")
-ax_nn.set_xlabel(position_xlabel)
-ax_nn.set_ylabel(position_ylabel)
-ax_nn.set_title("Pair correlation")
+# compute density-density correlator \int dR <n(R + dr/2) n(R - dr/2)>
+relative_positions = []
+for cntc in range(len(positions_batch)):
+    config_up = positions_batch[cntc]
+    for cntup in range(len(config_up)):
+        relative_positions += np.subtract(config_up[cntup+1:], config_up[cntup]).tolist()
+relative_positions = lattices.send_positions_to_first_unit_cell(relative_positions, lat_vec, rec)
 
-# plot static structure factor
-fig_s, ax_s = plt.subplots(1, 1, figsize = (7, 5))
-k_vectors = structure_obs["k_vectors"]
-im_s = ax_s.scatter(
-    k_vectors[:, 0],
-    k_vectors[:, 1],
-    c=structure_obs["structure_factor"],
-    s=80,
-)
-fig_s.colorbar(im_s, ax=ax_s, label=r"$S(\mathbf{k})$")
-ax_s.set_aspect("equal", adjustable="box")
-ax_s.set_xlabel(r"$k_x$")
-ax_s.set_ylabel(r"$k_y$")
-ax_s.set_title("Static structure factor")
+# plot density-density correlator
+fig_nn, ax_nn = plt.subplots(1, 1, figsize = (7, 5))
+ax_nn.scatter(relative_positions[:,0], relative_positions[:,1], color="tab:blue", s=1, alpha=0.03)
+ax_nn.set_xlabel("x / a_M")
+ax_nn.set_ylabel("y / a_M")
+ax_nn.set_title("Density-density correlation")

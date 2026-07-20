@@ -195,7 +195,7 @@ elif network_type == 'SlaterNet':
     cfg.network.determinants = 1 # when using a single determinant, SlaterNet is equivalent to Hartree-Fock
 
 # Get folder name to save the results
-folder_name = f"results/2deg-CoulombMoire/{network_type}/el{nspins[0]}_{nspins[1]}_N{num_unit_cells}_V{np.round(moire_potential_strength,8)}_{moire_potential_phi}_U{np.round(interaction_energy_scale,8)}"
+folder_name = f"PeriodicWave/results/2deg-CoulombMoire/{network_type}/el{nspins[0]}_{nspins[1]}_N{num_unit_cells}_V{np.round(moire_potential_strength,8)}_{moire_potential_phi}_U{np.round(interaction_energy_scale,8)}"
 
 # save path
 cfg.log.save_path = folder_name

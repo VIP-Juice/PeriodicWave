@@ -103,7 +103,7 @@ cfg.batch_size = 1024
 cfg.optim.optimizer = 'kfac'
 cfg.optim.objective = 'vmc'
 cfg.optim.iterations = 20000
-cfg.optim.lr.rate  = 0.1
+cfg.optim.lr.rate  = 0.2
 cfg.optim.lr.delay = 2000
 cfg.optim.lr.decay = 1.0
 
@@ -141,14 +141,14 @@ if network_type == 'CustomPsiformer':
 elif network_type == 'SlaterNet':
     cfg.network.network_type = 'SlaterNet'
     cfg.network.SlaterNet.num_layers = 4
-    cfg.network.SlaterNet.mlp_dim    = 64
+    cfg.network.SlaterNet.mlp_dim    = 128
     cfg.network.SlaterNet.num_perceptrons_per_layer = 2
     cfg.network.SlaterNet.use_layer_norm = True
     cfg.network.SlaterNet.mlp_activation_fct = "GELU"
     cfg.network.determinants = 1 # when using a single determinant, SlaterNet is equivalent to Hartree-Fock
 
 # Get folder name to save the results
-folder_name = f"PeriodicWave/results/2deg-Coulomb/{network_type}/el{nspins[0]}_{nspins[1]}_rs{r_s}_{supercell_shape}"
+folder_name = f"PeriodicWave/results/2deg-Coulomb/{network_type}/el{nspins[0]}_{nspins[1]}_rs{r_s}_{supercell_shape}_lr{cfg.optim.lr.rate}"
 
 # save path
 cfg.log.save_path = folder_name

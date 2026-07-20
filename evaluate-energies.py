@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pandas as pd
 import os
+
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from sys import argv
 
 def convert_moire_scales(me_eff_rel = 0.35, eps_inverse = 0.2, moire_a = 8.031, moire_potential_strength = 15):
     """ 
@@ -61,37 +63,165 @@ def load_csv_data(folder_path, file_name):
     # Construct the full path to the CSV file
     file_path = os.path.join(folder_path, file_name)
     
-    # Load the CSV file, only reading the first 5 columns
-    data = pd.read_csv(file_path, usecols=["step", "energy", "ewmean", "ewvar", "pmove"])
+    data = pd.read_csv(file_path, usecols=["step", "energy", "ewmean", "locstd"])
     
     return data
 
+def convert_energy_columns(train_data, energy_scale, num_electrons):
+    unit_conversion = energy_scale / num_electrons
+
+    return {
+        "energy": train_data["energy"] * unit_conversion,
+        "ewmean": train_data["ewmean"] * unit_conversion,
+        "locstd": train_data["locstd"] * unit_conversion,
+    }
+
+def parse_args(argv):
+    def parse_nspins(nspins_arg):
+        nspins = tuple(int(n) for n in nspins_arg.split('_'))
+        if len(nspins) != 2:
+            raise ValueError("nspins must have format nup_ndown, for example 6_0")
+        return nspins
+    if len(argv) >= 2:
+        potential_type = argv[1]
+
+        if potential_type == "Coulomb":
+            if len(argv) < 5:
+                raise ValueError(
+                    "Expected arguments for Coulomb: "
+                    "Coulomb nspins r_s network_type"
+                )
+
+            return {
+                "potential_type": potential_type,
+                "nspins": parse_nspins(argv[2]),
+                "r_s": float(argv[3]),
+                "network_type": argv[4],
+                "supercell_shape": "tri",
+                "folder_name_extension": argv[5] if len(argv) >= 6 else "",
+            }
+
+        if potential_type == "CoulombMoire":
+            if len(argv) < 10:
+                raise ValueError(
+                    "Expected arguments for CoulombMoire: "
+                    "CoulombMoire nspins num_unit_cells me_eff_rel eps_inverse "
+                    "moire_lattice_constant_nm moire_potential_strength_meV "
+                    "moire_potential_phi network_type"
+                )
+
+            return {
+                "potential_type": potential_type,
+                "nspins": parse_nspins(argv[2]),
+                "num_unit_cells": int(argv[3]),
+                "me_eff_rel": float(argv[4]),
+                "eps_inverse": float(argv[5]),
+                "moire_lattice_constant_nm": float(argv[6]),
+                "moire_potential_strength_meV": float(argv[7]),
+                "moire_potential_phi": float(argv[8]),
+                "network_type": argv[9],
+                "folder_name_extension": argv[10] if len(argv) >= 11 else "",
+            }
+
+        raise ValueError(
+            'potential_type must be "Coulomb" or "CoulombMoire"; '
+            f"received {potential_type}"
+        )
+
+    return {
+        "potential_type": "CoulombMoire",
+        "nspins": (6, 0),
+        "num_unit_cells": 9,
+        "me_eff_rel": 0.35,
+        "eps_inverse": 0.2,
+        "moire_lattice_constant_nm": 8.031,
+        "moire_potential_strength_meV": 15,
+        "moire_potential_phi": 45,
+        "network_type": "CustomPsiformer",
+        "folder_name_extension": "",
+    }
+
+def get_folder_name(args, extension=""):
+    if args["potential_type"] == "Coulomb":
+        folder_name = (
+            f"results/2deg-Coulomb/{args['network_type']}/"
+            f"el{args['nspins'][0]}_{args['nspins'][1]}_rs{args['r_s']}_{args['supercell_shape']}"
+        )
+        return folder_name + extension
+
+    _, moire_potential_strength, interaction_energy_scale = convert_moire_scales(
+        args["me_eff_rel"],
+        args["eps_inverse"],
+        args["moire_lattice_constant_nm"],
+        args["moire_potential_strength_meV"],
+    )
+    folder_name = (
+        f"results/2deg-CoulombMoire/{args['network_type']}/"
+        f"el{args['nspins'][0]}_{args['nspins'][1]}_N{args['num_unit_cells']}_"
+        f"V{np.round(moire_potential_strength,8)}_{args['moire_potential_phi']}_"
+        f"U{np.round(interaction_energy_scale,8)}"
+    )
+    return folder_name + extension
+
 ndim = 2 # spatial dimension of the system
-network_type = "SlaterNet"
 
 # system parameters
-potential_type = "Coulomb"
-nspins = (3, 3)
-num_unit_cells = 9
+print(f"Evaluating 2DEG energies with parameters: {argv}")
+args = parse_args(argv)
+potential_type = args["potential_type"]
+network_type = args["network_type"]
+nspins = args["nspins"]
 num_electrons = sum(nspins)
-me_eff_rel = 0.35 # in units of bare electron mass
-eps_inverse = 0.2 # inverse dielectric constant of surrounding dielectric
-moire_lattice_constant_nm = 8.031 # in nm
-moire_potential_strength_meV = 15 # in meV
-moire_potential_phi = 45 # potential shape angle in degrees
 
-rs = 33.0
-supercell_shape = 'tri' # triangular supercell
-
-# Convert SI units to natural units
-energy_scale, moire_potential_strength, interaction_energy_scale = convert_moire_scales(me_eff_rel, eps_inverse, moire_lattice_constant_nm, moire_potential_strength_meV)
+if potential_type == "CoulombMoire":
+    energy_scale, _, _ = convert_moire_scales(
+        args["me_eff_rel"],
+        args["eps_inverse"],
+        args["moire_lattice_constant_nm"],
+        args["moire_potential_strength_meV"],
+    )
+    energy_ylabel = "energy / electron (meV)"
+else:
+    energy_scale = 1.0
+    energy_ylabel = "energy / electron"
 
 # generate folder name
-folder_name = f"results/2deg-{potential_type}/{network_type}/el{nspins[0]}_{nspins[1]}_rs{rs}_{supercell_shape}"
-# folder_name = f"results/2deg-CoulombMoire/{network_type}/el{nspins[0]}_{nspins[1]}_N{num_unit_cells}_V{np.round(moire_potential_strength,8)}_{moire_potential_phi}_U{np.round(interaction_energy_scale,8)}"
+folder_name = get_folder_name(args, args["folder_name_extension"])
 train_data = load_csv_data(folder_name, "train_stats.csv")
+energy_data = convert_energy_columns(train_data, energy_scale, num_electrons)
+final_ewmean = float(energy_data["ewmean"].iloc[-1])
+final_locstd = float(energy_data["locstd"].iloc[-1])
 
 fig, ax = plt.subplots(1,1, figsize = (7,5), dpi=300)
-ax.plot(train_data['step'], train_data['energy'] * energy_scale / num_electrons, marker='o', linestyle='-', linewidth=0.4, markersize=1, alpha=0.4)
+ax.axhspan(
+    final_ewmean - final_locstd,
+    final_ewmean + final_locstd,
+    color="tab:orange",
+    alpha=0.16,
+    linewidth=0,
+    label=f"final EW mean +/- final local-energy std ({final_locstd:.3g})",
+    zorder=0,
+)
+ax.axhline(
+    final_ewmean,
+    color="tab:orange",
+    linestyle="--",
+    linewidth=1.2,
+    label=f"final EW mean ({final_ewmean:.6g})",
+    zorder=1,
+)
+ax.plot(
+    train_data["step"],
+    energy_data["energy"],
+    marker='o',
+    linestyle='-',
+    linewidth=0.4,
+    markersize=1,
+    alpha=0.4,
+    label="batch mean energy",
+    zorder=2,
+)
 ax.set_xlabel("step")
-ax.set_ylabel("energy (meV)")
+ax.set_ylabel(energy_ylabel)
+ax.legend(frameon=False)
+fig.tight_layout()
