@@ -14,6 +14,14 @@
 
 """
 This code runs a calculation of a two-dimensional homogeneous electron gas with Coulomb interaction.
+
+Optional positional arguments after NUP_NDOWN, R_S, and NETWORK_TYPE:
+  FOLDER_EXTENSION
+      Start an altered task in a suffixed result folder, using the default
+      iteration target.
+  FOLDER_EXTENSION TOTAL_ITERATIONS RESTORE_PATH
+      Continue from RESTORE_PATH into the suffixed result folder, up to the
+      specified total iteration target.
 """
 
 import os
@@ -23,6 +31,7 @@ import numpy as np
 
 from absl import logging
 from periodicwave import base_config
+from periodicwave import checkpoint
 from periodicwave import train
 
 from periodicwave.utils import custom_logging
@@ -44,17 +53,53 @@ print(f"Matmul precision set to: {jax.default_matmul_precision}")
 # Get parameters defining the physical system
 print(f"Calculating 2DEG with parameters: {argv}\n=============================================")
 
-if len(argv) >= 2:
-    program_name = argv[0]
-    # number of spin spin up, down electrons
-    nspins = [int(n) for n in argv[1].split('_')] 
+def parse_run_arguments(command_line):
+    usage = (
+        f"Usage: {command_line[0]} [NUP_NDOWN R_S NETWORK_TYPE "
+        "[FOLDER_EXTENSION [TOTAL_ITERATIONS RESTORE_PATH]]]"
+    )
+
+    if len(command_line) == 1:
+        return [2, 0], 10, "CustomPsiformer", "", None, ""
+
+    if len(command_line) not in (4, 5, 7):
+        raise ValueError(
+            usage
+            + "\nA fresh altered run takes only FOLDER_EXTENSION. A "
+            "continuation requires FOLDER_EXTENSION, TOTAL_ITERATIONS, and "
+            "RESTORE_PATH."
+        )
+
+    # number of spin up, spin down electrons
+    nspins = [int(n) for n in command_line[1].split('_')]
     # Ratio between interaction and kinetic energy scale
-    r_s = float(argv[2])
-    network_type = argv[3]
-else:
-    nspins = [2, 0]
-    r_s = 10
-    network_type = "CustomPsiformer" # "SlaterNet", "CustomPsiformer"
+    r_s = float(command_line[2])
+    network_type = command_line[3]
+    folder_extension = command_line[4] if len(command_line) >= 5 else ""
+    total_iterations = int(command_line[5]) if len(command_line) == 7 else None
+    restore_path = command_line[6] if len(command_line) == 7 else ""
+
+    if total_iterations is not None and total_iterations <= 0:
+        raise ValueError("TOTAL_ITERATIONS must be positive.")
+
+    return (
+        nspins,
+        r_s,
+        network_type,
+        folder_extension,
+        total_iterations,
+        restore_path,
+    )
+
+
+(
+    nspins,
+    r_s,
+    network_type,
+    folder_extension,
+    total_iterations,
+    restore_path,
+) = parse_run_arguments(argv)
 
 # By default, use square supercell for pbc
 supercell_shape = 'tri'
@@ -102,7 +147,9 @@ cfg.batch_size = 1024
 # learning rate parameters
 cfg.optim.optimizer = 'kfac'
 cfg.optim.objective = 'vmc'
-cfg.optim.iterations = 20000
+cfg.optim.iterations = 10000
+if total_iterations is not None:
+    cfg.optim.iterations = total_iterations
 cfg.optim.lr.rate  = 0.1
 cfg.optim.lr.delay = 2000
 cfg.optim.lr.decay = 1.0
@@ -124,7 +171,6 @@ cfg.network.jastrow = "NONE"
 cfg.network.jastrow_kwargs = {'ndim':cfg.system.ndim}
 
 # network architecture parameters
-# network_type = 'SlaterNet' 
 # Code to run Psiformer
 if network_type == 'CustomPsiformer':
     cfg.network.network_type = 'CustomPsiformer'
@@ -147,11 +193,47 @@ elif network_type == 'SlaterNet':
     cfg.network.SlaterNet.mlp_activation_fct = "GELU"
     cfg.network.determinants = 1 # when using a single determinant, SlaterNet is equivalent to Hartree-Fock
 
-# Get folder name to save the results
-folder_name = f"PeriodicWave/results/2deg-Coulomb/{network_type}/el{nspins[0]}_{nspins[1]}_rs{r_s}_{supercell_shape}"
+# Get folder name to save the results. The extension is appended literally.
+base_folder_name = f"PeriodicWave/results/2deg-Coulomb/{network_type}/el{nspins[0]}_{nspins[1]}_rs{r_s}_{supercell_shape}"
+folder_name = base_folder_name + folder_extension
 
-# save path
+# Save new checkpoints in folder_name. For a branched continuation, restore
+# from restore_path only when folder_name does not yet contain a checkpoint.
 cfg.log.save_path = folder_name
+cfg.log.restore_path = restore_path
+
+if restore_path and os.path.abspath(restore_path) == os.path.abspath(folder_name):
+    raise ValueError("RESTORE_PATH must differ from the destination folder.")
+
+destination_checkpoint = checkpoint.find_last_checkpoint(folder_name)
+source_checkpoint = (
+    None
+    if destination_checkpoint
+    else checkpoint.find_last_checkpoint(restore_path)
+)
+selected_checkpoint = destination_checkpoint or source_checkpoint
+
+if restore_path and selected_checkpoint is None:
+    raise FileNotFoundError(
+        "No checkpoint was found in either the destination folder "
+        f"'{folder_name}' or RESTORE_PATH '{restore_path}'."
+    )
+
+if selected_checkpoint:
+    with np.load(selected_checkpoint, allow_pickle=True) as checkpoint_data:
+        next_iteration = int(checkpoint_data['t']) + 1
+    if cfg.optim.iterations <= next_iteration:
+        raise ValueError(
+            f"TOTAL_ITERATIONS ({cfg.optim.iterations}) must be greater than "
+            f"the checkpoint's next iteration ({next_iteration})."
+        )
+    checkpoint_role = "destination" if destination_checkpoint else "source"
+    print(
+        f"Continuing from {checkpoint_role} checkpoint: {selected_checkpoint}\n"
+        f"Training iterations: {next_iteration} to {cfg.optim.iterations - 1}"
+    )
+elif folder_extension:
+    print(f"Starting fresh altered run in: {folder_name}")
 
 # log device info. 
 # If same folder contains previous runs, rename old log file to keep information.

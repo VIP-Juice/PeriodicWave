@@ -141,7 +141,7 @@ if network_type == 'CustomPsiformer':
 elif network_type == 'SlaterNet':
     cfg.network.network_type = 'SlaterNet'
     cfg.network.SlaterNet.num_layers = 4
-    cfg.network.SlaterNet.mlp_dim    = 128
+    cfg.network.SlaterNet.mlp_dim    = 64
     cfg.network.SlaterNet.num_perceptrons_per_layer = 2
     cfg.network.SlaterNet.use_layer_norm = True
     cfg.network.SlaterNet.mlp_activation_fct = "GELU"
