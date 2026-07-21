@@ -544,8 +544,23 @@ def train(cfg: ml_collections.ConfigDict, writer_manager=None):
 
   # Compute the learning rate
   def learning_rate_schedule(t_: jnp.ndarray) -> jnp.ndarray:
-    return cfg.optim.lr.rate * jnp.power(
-        (1.0 / (1.0 + (t_/cfg.optim.lr.delay))), cfg.optim.lr.decay)
+    default_rate = cfg.optim.lr.rate * jnp.power(
+        1.0 / (1.0 + t_ / cfg.optim.lr.delay), cfg.optim.lr.decay)
+    duration = cfg.optim.lr.warm_duration
+    if not duration or t_init == 0:
+      return default_rate
+
+    stopped_rate = cfg.optim.lr.rate * jnp.power(
+        1.0 / (1.0 + (t_init - 1) / cfg.optim.lr.delay),
+        cfg.optim.lr.decay)
+    warm_progress = jnp.clip((t_ - t_init) / duration, 0.0, 1.0)
+    warm_rate = stopped_rate + warm_progress * (
+        cfg.optim.lr.rate - stopped_rate)
+    decay_step = jnp.maximum(t_ - t_init - duration, 0)
+    continued_rate = cfg.optim.lr.rate * jnp.power(
+        1.0 / (1.0 + decay_step / cfg.optim.lr.delay),
+        cfg.optim.lr.decay)
+    return jnp.where(t_ < t_init + duration, warm_rate, continued_rate)
 
   # Construct and setup optimizer
   if cfg.optim.optimizer == 'none':
